@@ -1,0 +1,123 @@
+import os
+import unittest
+
+from BalanceamentoCarga import BalanceamentoCarga, BalanceamentoCargaLimiteException, User, Servidor
+
+
+class TestBalanceamentoCarga(unittest.TestCase):
+
+    def setUp(self):
+        writer_input = open('test_input.txt', 'w')
+        writer_input.write('4\n')
+        writer_input.write('2\n')
+        writer_input.write('1\n')
+        writer_input.write('3\n')
+        writer_input.write('0\n')
+        writer_input.write('1\n')
+        writer_input.write('0\n')
+        writer_input.write('1')
+        writer_input.close()
+
+        self.reader = open('test_input.txt', 'r')
+        self.balanceamento_carga = BalanceamentoCarga(self.reader, open('test_output.txt', 'w'), )
+
+        User.ttask = int(self.reader.readline())  # Ler e define ttask
+        Servidor.umax = int(self.reader.readline())  # Ler e define umax
+
+    def tearDown(self):
+        self.balanceamento_carga.reader.close()
+        self.balanceamento_carga.writer.close()
+        os.remove('test_input.txt')
+        os.remove('test_output.txt')
+
+    def test_verificar_limites_ttask(self):
+        """Testar se um valor ttask válido é aceito pela função"""
+        self.assertEqual(User.verificar_limite_ttask(), 0)
+
+    def test_verificar_limites_umax(self):
+        """Testar se um valor umax válido é aceito pela função"""
+        self.assertEqual(Servidor.verificar_limite_umax(), 0)
+
+    def test_verificar_limites_inferiror_ttask(self):
+        """Testar se para um valor menor que o permitido para ttask é lançada a exceção esperada"""
+        with self.assertRaises(BalanceamentoCargaLimiteException):
+            User.ttask = 0
+            User.verificar_limite_ttask()
+
+    def test_verificar_limites_superior_ttask(self):
+        """Testar se para um valor maior que o permitido para ttask é lançada a exceção esperada"""
+        with self.assertRaises(BalanceamentoCargaLimiteException):
+            User.ttask = 11
+            User.verificar_limite_ttask()
+
+    def test_verificar_limites_inferiror_umax(self):
+        """Testar se para um valor menor que o permitido para umax é lançada a exceção esperada"""
+        with self.assertRaises(BalanceamentoCargaLimiteException):
+            Servidor.umax = 0
+            Servidor.verificar_limite_umax()
+
+    def test_verificar_limites_superior(self):
+        """Testar se para um valor maior que o permitido para umax é lançada a exceção esperada"""
+        with self.assertRaises(BalanceamentoCargaLimiteException):
+            Servidor.umax = 11
+            Servidor.verificar_limite_umax()
+
+    def test_ler_prox_tick(self):
+        """Testa o método de leitura do próximo tick"""
+        tick = self.balanceamento_carga.ler_prox_tick()
+        self.assertEqual(tick, 1)
+
+    def test_escrever_saida(self):
+        """Testa o método que escreve a saída para o tick lido"""
+        self.balanceamento_carga.alocar_novos_usuarios(1)
+        self.assertEqual(self.balanceamento_carga.escrever_saida(), '1\n')
+
+    def test_verificar_disponobilidade(self):
+        """Testa os métodos que verifica a disponibilidade do servidor, que aloca usuários e
+        que calcula os usuários ativos e custo do servidor"""
+        self.balanceamento_carga.alocar_novos_usuarios(1)
+        self.balanceamento_carga.custo_servidor = len(self.balanceamento_carga.servidores)
+        self.assertEqual(self.balanceamento_carga.quantidade_user_ativos(), 1)
+        self.assertEqual(self.balanceamento_carga.servidores[0].verificar_disponibilidade(), True)
+        self.assertEqual(self.balanceamento_carga.custo_servidor, 1)
+        self.balanceamento_carga.alocar_novos_usuarios(1)
+        self.balanceamento_carga.custo_servidor = len(self.balanceamento_carga.servidores)
+        self.assertEqual(self.balanceamento_carga.servidores[0].verificar_disponibilidade(), False)
+        self.assertEqual(self.balanceamento_carga.quantidade_user_ativos(), 2)
+        self.assertEqual(self.balanceamento_carga.custo_servidor, 1)
+        self.balanceamento_carga.alocar_novos_usuarios(1)
+        self.balanceamento_carga.custo_servidor = len(self.balanceamento_carga.servidores)
+        self.assertEqual(self.balanceamento_carga.custo_servidor, 2)
+
+    def test_metodos_remover_decremento(self):
+        """Testar vários metodos utilizados para remover um tick, remover usuário e remover servidor:
+             Da classe user: remove_tick()
+             Da classe Servidor: remover_tick_usuarios()
+             Da classe BalanceamentoCarga: remover_tick_usuarios_servidores()
+         """
+        self.balanceamento_carga.alocar_novos_usuarios(1)
+        self.balanceamento_carga.remover_tick_usuarios_servidores()  # remover um tick
+        self.assertEqual(self.balanceamento_carga.servidores[0].usuarios[0].ttask_restantes, 3)
+
+        # finalizar ttask
+        for i in range(User.ttask - 1):
+            self.balanceamento_carga.remover_tick_usuarios_servidores()
+
+        self.assertEqual(self.balanceamento_carga.quantidade_user_ativos(), 0)
+        self.assertEqual(len(self.balanceamento_carga.servidores), 0)
+
+    def test_saida_gerada(self):
+        """Testa a saída gerada, com o resultado esperado final"""
+        self.balanceamento_carga.executar_balanceamento()
+
+        self.assertEqual(self.balanceamento_carga.quantidade_user, 0)
+        self.assertEqual(self.balanceamento_carga.custo_servidor, 15)
+
+        self.balanceamento_carga.writer.close()
+        self.balanceamento_carga.writer = open('test_output.txt', 'r')
+        read_output = self.balanceamento_carga.writer.read()
+        self.assertEqual(read_output, '1\n2,2\n2,2\n2,2,1\n1,2,1\n2\n2\n1\n1\n0\n15')
+
+
+if __name__ == '__main__':
+    unittest.main()
